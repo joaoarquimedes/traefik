@@ -1,0 +1,27 @@
+networks:
+  internal:
+
+volumes:
+  traefik_log:
+    external: true
+
+services:
+  logrotate:
+    build:
+      args:
+        ARCH: ${ARCH}
+      context: ./Dockerfile
+      dockerfile: logrotate.dockerfile
+    image: local/traefik-logrotate
+    restart: none
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+    volumes:
+      - traefik_log:/var/log/traefik:rw
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      internal:
+    command: ash -c "exit 0"

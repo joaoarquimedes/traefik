@@ -1,0 +1,108 @@
+networks:
+  traefik:
+    name: traefik
+    driver: overlay
+    attachable: true
+
+volumes:
+  certificate:
+  log:
+
+services:
+  server:
+    image: traefik:2.11
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    volumes:
+      - certificate:/letsencrypt:rw
+      - log:/var/log/traefik:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      traefik:
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    command:
+      - "--log.level=INFO"
+      - "--log.filePath=/var/log/traefik/traefik.log"
+      - "--accesslog"
+      - "--accesslog.filepath=/var/log/traefik/access.log"
+      - "--accesslog.bufferingsize=100"
+      - "--api"
+      - "--metrics"
+      - "--metrics.prometheus.buckets=0.1,0.3,1.2,5.0"
+      - "--api.insecure=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.swarmMode=true"
+      - "--providers.docker.network=traefik"
+      - "--serverstransport.insecureskipverify=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=master@yourdomain.localhost"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--serversTransport.forwardingTimeouts.dialTimeout=60s"
+
+  nginx:
+    build:
+      context: ./Dockerfile
+      dockerfile: nginx.dockerfile
+      args:
+        ARCH: ${ARCH}
+    image: local/traefik-web:latest
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: any
+        delay: 15s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=traefik"
+        # HTTP
+        - "traefik.http.routers.traefik-web_http.rule=Host(`localhost`)"
+        - "traefik.http.routers.traefik-web_http.entrypoints=web"
+        - "traefik.http.routers.traefik-web_http.middlewares=redirect_https@docker"
+        # HTTPS
+        - "traefik.http.routers.traefik-web_https.rule=Host(`localhost`)"
+        - "traefik.http.routers.traefik-web_https.tls=true"
+        - "traefik.http.routers.traefik-web_https.entrypoints=websecure"
+        # Service
+        - "traefik.http.services.traefik-web_http.loadbalancer.server.scheme=https"
+        - "traefik.http.services.traefik-web_http.loadbalancer.server.port=443"
+        - "traefik.http.services.traefik-web_http.loadBalancer.sticky.cookie=true"
+        - "traefik.http.services.traefik-web_http.loadBalancer.sticky.cookie.name=traefik-web_http"
+        - "traefik.http.services.traefik-web_http.loadbalancer.sticky.cookie.secure=true"
+        - "traefik.backend.loadbalancer.sticky=true"
+        # Middlewares
+        - "traefik.http.middlewares.redirect_https.redirectscheme.port=443"
+        - "traefik.http.middlewares.redirect_https.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.redirect_https.redirectscheme.permanent=true"
+        - "traefik.http.middlewares.compress.compress=true"
+    volumes:
+      - ./conf/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./conf/nginx/html:/etc/nginx/html:ro
+    networks:
+      traefik:
+    healthcheck:
+      test: curl -Is --insecure --fail https://localhost || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 2
