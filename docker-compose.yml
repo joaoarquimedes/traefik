@@ -27,6 +27,7 @@ services:
       - certificate:/letsencrypt:rw
       - log:/var/log/traefik:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/localtime:/etc/localtime:ro
     networks:
       traefik:
     ports:
@@ -99,6 +100,7 @@ services:
     volumes:
       - ./conf/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./conf/nginx/html:/etc/nginx/html:ro
+      - /etc/localtime:/etc/localtime:ro
     networks:
       traefik:
     healthcheck:
