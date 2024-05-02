@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
+# Stack name
 export STACK=traefik
 
-function timeStamp() { date +"%Y/%m/%d - %H:%M:%S"; }
 export PATH_FULL=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 cd $PATH_FULL
 
@@ -49,7 +49,6 @@ function logrotate(){
   reload && sleep 5 && clear
 }
 
-echo "$(timeStamp) - $1"
 $1
 
 exit 0
